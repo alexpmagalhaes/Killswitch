@@ -8,3 +8,8 @@ David Meierhofer, Michal Malszycki, Ibrahim A. Ilik, Tugce Aktas, Matthew L. Kra
 Nadine Vastenhouw, Matthew D. Weitzman, Florian Grebien, Henri Niskanen & Denes Hnisz
 
 All custom code used for data analyses are publicly available at Zenodo (https://doi.org/10.5281/zenodo.15322636).
+
+
+Questions regarding code please email:
+
+Alexandre P Magalhaes -> magalhae@molgen.mpg.de or to github: @alexpmagalhaes
