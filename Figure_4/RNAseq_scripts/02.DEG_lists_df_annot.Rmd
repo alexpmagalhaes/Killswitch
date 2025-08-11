@@ -1,0 +1,127 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+setwd("/Users/magalhae/Desktop/Henri_RNAseq_20241021/Heatmaps/")
+library(tidyverse)
+library(openxlsx)
+```
+```{r}
+col_toKeep = c("HEK293TuntrvsHEK293Tegfp.up", "HEK293TuntrvsHEK293Tegfp.down",
+"HEK293TwtvsHEK293Tegfp.up", "HEK293TwtvsHEK293Tegfp.down",
+"HEK293TksvsHEK293Tegfp.up", "HEK293TksvsHEK293Tegfp.down",
+"HEK293TksfgvsHEK293Tegfp.up", "HEK293TksfgvsHEK293Tegfp.down",
+"HEK293TksvsHEK293Twt.up", "HEK293TksvsHEK293Twt.down",
+"HEK293TksfgvsHEK293Twt.up", "HEK293TksfgvsHEK293Twt.down",
+"HEK293TksfgvsHEK293Tks.up", "HEK293TksfgvsHEK293Tks.down"
+)
+
+DEGs_sep <- read_csv("DEGlist.separated.FilteredR_FC.csv")
+
+DEGs_sep <-  DEGs_sep %>% dplyr::select(col_toKeep)
+
+DEG_lists <- lapply( split(DEGs_sep,seq_along(DEGs_sep[,1])), as.list)
+DEG_lists <- DEG_lists[["1"]]
+DEG_lists <- lapply(DEG_lists, function(x) x[!is.na(x)])
+
+DEG_lists_u = c()
+
+DEG_lists_u[['HEK293TuntrvsHEK293Tegfp']] <- append(DEG_lists$HEK293TuntrvsHEK293Tegfp.up, DEG_lists$HEK293TuntrvsHEK293Tegfp.down)
+DEG_lists_u[['HEK293TwtvsHEK293Tegfp']] <- append(DEG_lists$HEK293TwtvsHEK293Tegfp.up, DEG_lists$HEK293TwtvsHEK293Tegfp.down)
+DEG_lists_u[['HEK293TksvsHEK293Tegfp']] <- append(DEG_lists$HEK293TksvsHEK293Tegfp.up, DEG_lists$HEK293TksvsHEK293Tegfp.down)
+DEG_lists_u[['HEK293TksfgvsHEK293Tegfp']] <- append(DEG_lists$HEK293TksfgvsHEK293Tegfp.up, DEG_lists$HEK293TksfgvsHEK293Tegfp.down)
+DEG_lists_u[['HEK293TksvsHEK293Twt']] <- append(DEG_lists$HEK293TksvsHEK293Twt.up, DEG_lists$HEK293TksvsHEK293Twt.down)
+DEG_lists_u[['HEK293TksfgvsHEK293Twt']] <- append(DEG_lists$HEK293TksfgvsHEK293Twt.up, DEG_lists$HEK293TksfgvsHEK293Twt.down)
+DEG_lists_u[['HEK293TksfgvsHEK293Tks']] <- append(DEG_lists$HEK293TksfgvsHEK293Tks.up, DEG_lists$HEK293TksfgvsHEK293Tks.down)
+
+DEG_lists_df = c()
+
+DEG_lists_df[['HEK293TuntrvsHEK293Tegfp']]<- as.data.frame(DEG_lists_u$HEK293TuntrvsHEK293Tegfp)
+DEG_lists_df[['HEK293TwtvsHEK293Tegfp']]<- as.data.frame(DEG_lists_u$HEK293TwtvsHEK293Tegfp)
+DEG_lists_df[['HEK293TksvsHEK293Tegfp']]<- as.data.frame(DEG_lists_u$HEK293TksvsHEK293Tegfp)
+DEG_lists_df[['HEK293TksfgvsHEK293Tegfp']]<- as.data.frame(DEG_lists_u$HEK293TksfgvsHEK293Tegfp)
+DEG_lists_df[['HEK293TksvsHEK293Twt']]<- as.data.frame(DEG_lists_u$HEK293TksvsHEK293Twt)
+DEG_lists_df[['HEK293TksfgvsHEK293Twt']]<- as.data.frame(DEG_lists_u$HEK293TksfgvsHEK293Twt)
+DEG_lists_df[['HEK293TksfgvsHEK293Tks']]<- as.data.frame(DEG_lists_u$HEK293TksfgvsHEK293Tks)
+
+
+# Function to rename the first column of a data frame
+rename_first_column <- function(df, new_name) {
+  # Get original column names
+  col_names <- colnames(df)
+  # Change the first column name
+  col_names[1] <- new_name
+  # Set new column names
+  colnames(df) <- col_names
+  return(df)
+}
+
+# Apply the renaming function to each data frame in the list
+new_col_name <- "gene_id"  # Specify the new column name
+DEG_lists_df <- lapply(DEG_lists_df, rename_first_column, new_name = new_col_name)
+
+```
+```{r}
+pdf("HEK293T_DEGS_lenght.pdf")
+barplot(lengths(DEG_lists),las=2)
+dev.off()
+```
+
+```{r}
+anno <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/annotData_hg38.csv")
+MeanAllCount <- read_csv("MeansAll-norm.csv")
+```
+```{r}
+left_join_with_annot <- function(df) {
+  df %>% dplyr::left_join(anno, by = "gene_id")
+}
+DEG_lists_df_annot <- lapply(DEG_lists_df, left_join_with_annot)
+
+left_join_with_count <- function(df) {
+  df %>% dplyr::left_join(MeanAllCount, by = "gene_id")
+}
+DEG_lists_df_annot <- lapply(DEG_lists_df_annot, left_join_with_count)
+```
+
+```{r}
+HEK293TuntrvsHEK293Tegfp <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TuntrvsHEK293Tegfp.complete.csv") %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+HEK293TwtvsHEK293Tegfp <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TwtvsHEK293Tegfp.complete.csv")  %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+HEK293TksvsHEK293Tegfp <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksvsHEK293Tegfp.complete.csv")  %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+HEK293TksfgvsHEK293Tegfp <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksfgvsHEK293Tegfp.complete.csv")  %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+HEK293TksfgvsHEK293Tks <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksfgvsHEK293Tks.complete.csv")  %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+HEK293TksfgvsHEK293Twt <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksfgvsHEK293Twt.complete.csv")  %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+HEK293TksvsHEK293Twt <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksvsHEK293Twt.complete.csv")  %>% select(all_of(c("gene_id", "FoldChange","log2FoldChange","stat","pvalue","padj")))
+```
+
+```{r}
+DEG_lists_df_annot$HEK293TuntrvsHEK293Tegfp <- DEG_lists_df_annot$HEK293TuntrvsHEK293Tegfp %>% dplyr::left_join(HEK293TuntrvsHEK293Tegfp, by = "gene_id")
+DEG_lists_df_annot$HEK293TwtvsHEK293Tegfp <- DEG_lists_df_annot$HEK293TwtvsHEK293Tegfp %>% dplyr::left_join(HEK293TwtvsHEK293Tegfp, by = "gene_id")
+DEG_lists_df_annot$HEK293TksvsHEK293Tegfp <- DEG_lists_df_annot$HEK293TksvsHEK293Tegfp %>% dplyr::left_join(HEK293TksvsHEK293Tegfp, by = "gene_id")
+DEG_lists_df_annot$HEK293TksfgvsHEK293Tegfp <- DEG_lists_df_annot$HEK293TksfgvsHEK293Tegfp %>% dplyr::left_join(HEK293TksfgvsHEK293Tegfp, by = "gene_id")
+DEG_lists_df_annot$HEK293TksfgvsHEK293Tks <- DEG_lists_df_annot$HEK293TksfgvsHEK293Tks %>% dplyr::left_join(HEK293TksfgvsHEK293Tks, by = "gene_id")
+DEG_lists_df_annot$HEK293TksfgvsHEK293Twt <- DEG_lists_df_annot$HEK293TksfgvsHEK293Twt %>% dplyr::left_join(HEK293TksfgvsHEK293Twt, by = "gene_id")
+DEG_lists_df_annot$HEK293TksvsHEK293Twt <- DEG_lists_df_annot$HEK293TksvsHEK293Twt %>% dplyr::left_join(HEK293TksvsHEK293Twt, by = "gene_id")
+```
+
+
+```{r}
+# Create a new workbook
+wb <- createWorkbook()
+
+# Add each data frame as a new sheet
+for (name in names(DEG_lists_df_annot)) {
+  # Add a worksheet with the name of the data frame
+  addWorksheet(wb, sheetName = name)
+  
+  # Write the data frame to the worksheet
+  writeData(wb, sheet = name, x = DEG_lists_df_annot[[name]])
+}
+
+# Save the workbook to an Excel file
+saveWorkbook(wb, file = "DEGs_lists_HEK293T_annot.xlsx", overwrite = TRUE)
+```
+
+

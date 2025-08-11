@@ -1,0 +1,142 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+counts_to_tpm <- function(counts, featureLength, meanFragmentLength) {
+  
+  # Ensure valid arguments.
+  stopifnot(length(featureLength) == nrow(counts))
+  stopifnot(length(meanFragmentLength) == ncol(counts))
+  
+  # Compute effective lengths of features in each library.
+  effLen <- do.call(cbind, lapply(1:ncol(counts), function(i) {
+    featureLength - meanFragmentLength[i] + 1
+  }))
+  
+  # Exclude genes with length less than the mean fragment length.
+  idx <- apply(effLen, 1, function(x) min(x) > 1)
+  counts <- counts[idx,]
+  effLen <- effLen[idx,]
+  featureLength <- featureLength[idx]
+  
+  # Process one column at a time.
+  tpm <- do.call(cbind, lapply(1:ncol(counts), function(i) {
+    rate = log(counts[,i]) - log(effLen[,i])
+    denom = log(sum(exp(rate)))
+    exp(rate - denom + log(1e6))
+  }))
+
+  # Copy the row and column names from the original matrix.
+  colnames(tpm) <- colnames(counts)
+  rownames(tpm) <- rownames(counts)
+  return(tpm)
+}
+```
+
+
+```{r}
+hg38_gene_lenghts <- read_tsv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/hg38_gene_lenghts.tsv")
+countwL <- as.data.frame(counts) %>% rownames_to_column("gene_id") %>% left_join(hg38_gene_lenghts, by = "gene_id") %>% drop_na() %>% column_to_rownames("gene_id")
+```
+
+
+```{r}
+meanFragmentLength =c(270, 271, 260, 275, 265, 263, 272, 269, 279, 280, 273, 266, 277, 259, 283)
+
+CountsTPM <- counts_to_tpm(counts = countwL[,0:15], featureLength = countwL$length ,meanFragmentLength = meanFragmentLength)
+CountsTPM = as.data.frame(CountsTPM) %>% rownames_to_column("gene_id")
+```
+
+```{r}
+longCountsTPM <- gather(CountsTPM, "group", "Expression", -gene_id)
+
+# create a new column that as the name of the samples without the _
+# and the number of the replicate
+longCountsTPM = longCountsTPM %>% separate(group, c("tgroup", "tgroup2", NA), sep = "_", remove = F)%>% unite("tgroup", tgroup:tgroup2, sep= "_")
+
+# this is a pipe. group_by will divide the table into groups,
+# in this case by ID and replicate,
+# summarize will create stats for the groups and we are selecting the mean
+# and spread returns the table to the wide format.
+MeansCountsTPM <- longCountsTPM %>%
+  group_by(gene_id, tgroup) %>%
+  summarize(expression_mean = mean(Expression)) %>%
+  spread(., tgroup, expression_mean)
+# makes the column named ID as names of the rows
+
+write.csv(MeansCountsTPM, file= "MeansCountsTPM.csv", row.names = F)
+
+```
+```{r}
+annot_heat <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/PackageToSend/Ordered_heatmap_table_wAnnotation_20241206.csv") %>% column_to_rownames("gene_id")
+```
+
+```{r}
+C1  <- annot_heat[annot_heat$cluster == "C1",]
+C4C5 <- annot_heat[annot_heat$cluster == "C4" | annot_heat$cluster == "C5",]
+Upregulated_ks <- annot_heat[annot_heat$cluster == "C3" | annot_heat$cluster == "C4" | annot_heat$cluster == "C5",]
+```
+
+```{r}
+MeansCountsTPM = MeansCountsTPM %>% column_to_rownames("gene_id")
+
+TPM_C1 <- MeansCountsTPM[which(row.names(MeansCountsTPM) %in% row.names(C1)),]
+TPM_Upregulated_ks <- MeansCountsTPM[which(row.names(MeansCountsTPM) %in% row.names(Upregulated_ks)),]
+TPM_C4C5 <- MeansCountsTPM[which(row.names(MeansCountsTPM) %in% row.names(C4C5)),]
+```
+
+
+```{r}
+longTPM_C1 <- gather(TPM_C1, "group", "Expression")
+longTPM_C1$logCount <- log2(longTPM_C1$Expression + 0.1)
+levels(longTPM_C1$group) <- c('HEK293T_untr', 'HEK293T_EGFP', 'HEK293T_WT', 'HEK293T_KS', 'HEK293T_KSFtoG')
+longTPM_C1 <- dplyr::arrange(longTPM_C1, group)
+
+longTPM_Upregulated_ks <- gather(TPM_Upregulated_ks, "group", "Expression")
+longTPM_Upregulated_ks$logCount <- log2(longTPM_Upregulated_ks$Expression + 0.1)
+levels(longTPM_Upregulated_ks$group) <- c('HEK293T_untr', 'HEK293T_EGFP', 'HEK293T_WT', 'HEK293T_KS', 'HEK293T_KSFtoG')
+longTPM_Upregulated_ks <- dplyr::arrange(longTPM_Upregulated_ks, group)
+
+
+longTPM_C4C5 <- gather(TPM_C4C5, "group", "Expression")
+longTPM_C4C5$logCount <- log2(longTPM_C4C5$Expression + 0.1)
+levels(longTPM_C4C5$group) <- c('HEK293T_untr', 'HEK293T_EGFP', 'HEK293T_WT', 'HEK293T_KS', 'HEK293T_KSFtoG')
+longTPM_C4C5 <- dplyr::arrange(longTPM_C4C5, group)
+```
+
+```{r}
+graph <- ggviolin(longTPM_Upregulated_ks, x = "group", y = "logCount", fill = "group",
+         palette = c("lightgray", "#546e7a", "#487FAB","#932191", "#44A849"),
+         order = c('HEK293T_untr', 'HEK293T_EGFP', 'HEK293T_WT', 'HEK293T_KS', 'HEK293T_KSFtoG'),
+         add = "boxplot", add.params = list(fill = "white"))+
+  stat_summary(fun.data = function(x) data.frame(y=15, label = paste("Mean=",round(mean(x),2))), geom="text")
+
+graph
+ggexport(graph, filename = "ExprTPM_Mean_longCountsUpregulated_ks.pdf")
+```
+```{r}
+graph2 <- ggviolin(longTPM_C4C5, x = "group", y = "logCount", fill = "group",
+         palette = c("lightgray", "#546e7a", "#487FAB","#932191", "#44A849"),
+         order = c('HEK293T_untr', 'HEK293T_EGFP', 'HEK293T_WT', 'HEK293T_KS', 'HEK293T_KSFtoG'),
+         add = "boxplot", add.params = list(fill = "white"))+
+  stat_summary(fun.data = function(x) data.frame(y=15, label = paste("Mean=",round(mean(x),2))), geom="text")
+
+graph2
+ggexport(graph2, filename = "ExprTPM_Mean_longTPM_C4C5.pdf")
+```
+```{r}
+graph3 <- ggviolin(longTPM_C1, x = "group", y = "logCount", fill = "group",
+         palette = c("lightgray", "#546e7a", "#487FAB","#932191", "#44A849"),
+         order = c('HEK293T_untr', 'HEK293T_EGFP', 'HEK293T_WT', 'HEK293T_KS', 'HEK293T_KSFtoG'),
+         add = "boxplot", add.params = list(fill = "white"))+
+  stat_summary(fun.data = function(x) data.frame(y=15, label = paste("Mean=",round(mean(x),2))), geom="text")
+
+graph3
+ggexport(graph3, filename = "ExprTPM_Mean_C1.pdf")
+```

@@ -1,0 +1,138 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r}
+library(biomaRt)
+library(SARTools)
+library(DESeq2)
+library(tidyverse)
+library(RColorBrewer)
+library(pheatmap)
+library(pcaExplorer)
+library(Seurat)
+library(cowplot)
+library(topGO)
+library(org.Hs.eg.db)
+```
+
+```{r}
+setwd("/Users/magalhae/Desktop/Henri_RNAseq_20241021/PCA")
+```
+```{r}
+Allvst = read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/Heatmaps/AllCount-vst.csv") %>% column_to_rownames("gene_id")
+MeanAllCount <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/Heatmaps/MeansAll-norm.csv") %>% column_to_rownames("gene_id")
+genes <- read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/gene.txt", sep = '\t')
+annotData_hg38 <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/annotData_hg38.csv")
+target <- read_tsv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/target.txt")
+```
+
+```{r}
+# subset the background to include only the expressed genes
+bg_ids <- rownames(MeanAllCount)[rowSums(MeanAllCount) > 50]
+Allvst.filt <- Allvst[rownames(Allvst) %in% bg_ids,]
+```
+```{r}
+n=min(500, nrow(Allvst.filt))
+rv = apply(Allvst.filt, 1, var, na.rm=TRUE)
+pca = prcomp(t(Allvst.filt[order(rv, decreasing = TRUE), ][1:n,]))
+prp <- pca$sdev^2 * 100 / sum(pca$sdev^2)
+prp <- round(prp[1:3],2)
+
+
+scores <- as.data.frame(pca$x)
+scores$group <- target$Treatment
+
+loadings <- as.data.frame(pca$rotation)
+loadings$group <- rownames(loadings)
+
+```
+
+
+```{r}
+colors_r <- c("lightgray", "lightgray", "lightgray",
+            "#546e7a", "#546e7a", "#546e7a",
+            "#487FAB", "#487FAB", "#487FAB",
+            "#932191", "#932191", "#932191",
+            "#44A849", "#44A849", "#44A849"
+            )
+labels <- target$Label
+colorsg <- setNames(colors_r,labels )
+
+scores$color = colors_r
+```
+
+```{r}
+sampleDists <- dist(t(Allvst.filt))
+```
+
+```{r}
+save_pheatmap_pdf <- function(x, filename, width=7, height=7) {
+    stopifnot(!missing(x))
+    stopifnot(!missing(filename))
+    pdf(filename, width=width, height=height)
+    grid::grid.newpage()
+    grid::grid.draw(x$gtable)
+    dev.off()
+}
+```
+
+
+```{r fig.height=4, fig.width=5}
+sampleDistMatrix <- as.matrix(sampleDists)
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+
+p <- pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors, 
+         cellwidth=10, cellheight=10)
+
+save_pheatmap_pdf(p, "HEK293T_distanceMatrix.pdf")
+```
+```{r fig.height=2, fig.width=4}
+p <- ggplot(scores, aes(PC1, PC2, colour = I(color)))+
+  geom_point(size=2, aes(colour = I(color))) +
+  xlab(paste0("PC1: ",prp[1],"% variance")) +
+  ylab(paste0("PC2: ",prp[2],"% variance")) + 
+  coord_fixed() +
+  theme_bw() + 
+   theme(aspect.ratio = 1, legend.position = "none", panel.grid.major = element_blank() , panel.grid.minor = element_blank())
+pg  <- LabelPoints(plot = p, points = labels, repel = T, min.segment.length = 0, box.padding = 0.5, max.overlaps = Inf, size = 2)
+p2 <- ggplot(scores, aes(PC1, PC3, color= I(color))) +
+  geom_point(size=2, aes(colour = I(color))) +
+  xlab(paste0("PC1: ",prp[1],"% variance")) +
+  ylab(paste0("PC3: ",prp[3],"% variance")) +
+  coord_fixed() +
+  theme_bw() +
+  theme(aspect.ratio = 1, legend.position = "none", panel.grid.major = element_blank() , panel.grid.minor = element_blank())
+pg2<- LabelPoints(plot = p2, points = labels, repel = T, min.segment.length = 0, box.padding = 0.5, max.overlaps = Inf, size = 2)
+
+plot_grid(ncol = 2, pg, pg2)
+ggsave("RNAseq_PCA.pdf")
+```
+```{r}
+annotation = annotData_hg38
+topN = 15
+whichpc = 3
+title="Top and bottom loadings"
+geneloadings_sorted <- sort(pca$rotation[, whichpc])
+geneloadings_extreme <- c(tail(geneloadings_sorted, topN), head(geneloadings_sorted, topN))
+
+tab <- Allvst[names(geneloadings_extreme), ]
+write.csv(tab ,file = paste0(title, "PC", whichpc, ".csv"))
+
+rownames(tab) <- annotation$gene_name[match(rownames(tab), annotation$gene_id)]
+
+names(geneloadings_extreme) <- annotation$gene_name[match(names(geneloadings_extreme), annotation$gene_id)]
+
+pdf(paste0(title, "PC", whichpc, ".pdf"))
+barplot(geneloadings_extreme, las = 2, col = c(rep("steelblue", topN), rep("coral", topN)),
+          main = paste0(title, "PC", whichpc))
+dev.off()
+```
+

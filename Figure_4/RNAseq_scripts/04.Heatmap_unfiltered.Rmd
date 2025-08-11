@@ -1,0 +1,110 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+setwd("/Users/magalhae/Desktop/Henri_RNAseq_20241021/Heatmaps/")
+library(tidyverse)
+#library('DESeq2')
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(dendextend)
+library(viridis)
+```
+```{r}
+DEG_RFC = read.csv("DEGlist.FilteredR_FC.csv" , header = T)
+Allvst = read_csv("AllCount-vst.csv") 
+# Allvst = separate(Allvst, Id, into = c("Id", "Extra"), extra = "merge") %>% dplyr::select(-Extra)
+# 
+# for ( col in 1:ncol(Allvst)){
+#     colnames(Allvst)[col] <-  sub("sample[0-9][0-9]_", "", colnames(Allvst)[col])
+# }
+
+annotData_hg38 = read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/annotData_hg38.csv")
+```
+```{r}
+longAllvst <- gather(Allvst, "group", "Expression", -gene_id)
+
+# create a new column that as the name of the samples without the _
+# and the number of the replicate
+longAllvst = longAllvst %>% separate(group, c("tgroup", "tgroup2", NA), sep = "_", remove = F)%>% unite("tgroup", tgroup:tgroup2, sep= "_")
+```
+```{r}
+# this is a pipe. group_by will divide the table into groups,
+# in this case by ID and replicate,
+# summarize will create stats for the groups and we are selecting the mean
+# and spread returns the table to the wide format.
+MeansAllvst  <- longAllvst %>%
+  group_by(gene_id, tgroup) %>%
+  summarize(expression_mean = mean(Expression)) %>%
+  spread(., tgroup, expression_mean)
+# makes the column named ID as names of the rows
+
+write.csv(MeansAllvst, file= "MeansAllvst.csv", row.names = F)
+
+```
+```{r}
+MeansAllvst <- MeansAllvst %>% column_to_rownames("gene_id")
+MeansAllvstSC <- t(scale(t(MeansAllvst), scale = T, center = T))
+write.csv(MeansAllvstSC, file= "MeansAllvstSC.csv")
+hist(MeansAllvstSC)
+```
+```{r}
+MeansDEGSvstSC <- MeansAllvstSC[which(row.names(MeansAllvstSC) %in% DEG_RFC$gene_id),]
+hist(MeansDEGSvstSC)
+write.csv(MeansDEGSvstSC, file= "MeansDEGSvstSC.csv")
+```
+
+```{r}
+col.order <- c("HEK293T_untr", "HEK293T_EGFP", "HEK293T_WT", "HEK293T_KS","HEK293T_KSFtoG")
+
+MeansDEGSvstSC <- as.data.frame(MeansDEGSvstSC)
+MeansDEGSvstSC = MeansDEGSvstSC %>% dplyr::select(all_of(col.order))
+
+
+MeansDEGSvstSC = MeansDEGSvstSC %>% as.matrix()
+
+write.csv(MeansDEGSvstSC, file= "MeansDEGSvstSC.csv")
+```
+
+
+```{r}
+MeansDEGSvstSC_annot = left_join(rownames_to_column(as.data.frame(MeansDEGSvstSC), "gene_id"), annotData_hg38, by = 'gene_id')
+
+write.csv(MeansDEGSvstSC_annot, file= "MeansDEGSvstSC_annotated.csv")
+```
+
+```{r fig.height=4, fig.width=2}
+#row_dendo = hclust(dist(DEGvstMeansSC), method = "complete") # row clustering
+kclus <- kmeans(MeansDEGSvstSC, 4)
+split <- kclus$cluster
+```
+
+```{r fig.height=8, fig.width=12}
+
+h <- Heatmap(MeansDEGSvstSC,
+             name = "z-score", #title of legend
+             #col = colorRampPalette(rev(brewer.pal(n = 9, name ="Spectral")))(10),
+             col = colorRampPalette(rev(brewer.pal(n = 9, name ="RdYlBu")))(10),
+             #cluster_rows = color_branches(row_dendo, k = 9),
+             column_order = order(as.numeric(gsub("column", "", colnames(MeansDEGSvstSC)))),
+             show_row_names = FALSE,
+             split=split,
+             cluster_row_slices = FALSE,
+             width = unit(6, "cm") , height = unit(12, "cm")
+             )
+
+
+# pdf("RNAseq_Heatmap_test.pdf")
+h = draw(h)
+# dev.off()
+```
+
+
+

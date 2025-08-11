@@ -1,0 +1,571 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+---
+
+
+```{r}
+setwd("/Users/magalhae/Desktop/Henri_RNAseq_20241021/Volcano")
+library('tidyverse')
+#library('DESeq2')
+library('EnhancedVolcano')
+#library(ComplexHeatmap)
+library(RColorBrewer)
+library(dendextend)
+library(viridis)
+library(gridExtra)
+library(grid)
+```
+```{r}
+degs <- read_csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/DEGlist.separated.FilteredR_Fc.csv")
+```
+
+```{r}
+KSvsEGFP = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksvsHEK293Tegfp.complete.csv" , header = T)
+KSFtoGvsEGFP = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksfgvsHEK293Tegfp.complete.csv" , header = T)
+WTvsEGFP = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TwtvsHEK293Tegfp.complete.csv" , header = T)
+KSvsWT = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksvsHEK293Twt.complete.csv" , header = T)
+KSvsKSFtoG = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksfgvsHEK293Tks.complete.csv" , header = T)
+KSFtoGvsWT= read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/tables/Complete/HEK293TksfgvsHEK293Twt.complete.csv" , header = T)
+```
+```{r}
+RosenLab_up = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/BRD4_reference/RosenLab_up.txt" , header = T)
+RosenLab_down = read.csv("/Users/magalhae/Desktop/Henri_RNAseq_20241021/BRD4_reference/RosenLab_down.txt" , header = T)
+RosenLab_up = RosenLab_up$Id
+RosenLab_down = RosenLab_down$Id
+```
+
+```{r}
+qPCR_genes = c("SOX2", "ALX1", "VIM")
+
+
+
+
+
+
+```
+
+```{r}
+
+# selectLab = Reduce(intersect,
+#                    list(pos_reg_trnscrpt_POLII,
+#                         KSvsEGFP[KSvsEGFP$Id %in% unique(append(degs$HEK293TksvsHEK293Tegfp.down,
+#                                                                 degs$HEK293TksvsHEK293Tegfp.up)),
+#                                  ]$gene_name))
+
+selectLab = Reduce(intersect,
+                   list(qPCR_genes,
+                        KSvsEGFP[KSvsEGFP$Id %in% unique(append(degs$HEK293TksvsHEK293Tegfp.down,
+                                                                degs$HEK293TksvsHEK293Tegfp.up)),
+                                 ]$gene_name))
+
+
+```
+
+```{r fig.height=5, fig.width=4}
+keyvals <- ifelse(
+  KSvsEGFP$log2FoldChange <= -1.2 & KSvsEGFP$padj < 0.01, '#00AFBB',
+  ifelse(KSvsEGFP$log2FoldChange >= 1.2 & KSvsEGFP$padj < 0.01, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated by KS'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by KS'
+p1 <- EnhancedVolcano(KSvsEGFP,
+    lab = KSvsEGFP$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS versus EGFP',
+    subtitle = 'FC cutoff, 1.5; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 0.75,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)
+p1  + ggplot2::theme(aspect.ratio = 1)
+```
+```{r fig.height=5, fig.width=4}
+keyvals <- ifelse(
+  KSFtoGvsEGFP$log2FoldChange <= -1.2 & KSFtoGvsEGFP$padj < 0.01, '#00AFBB',
+  ifelse(KSFtoGvsEGFP$log2FoldChange >= 1.2 & KSFtoGvsEGFP$padj < 0.01, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated by KS FtoG'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by KS FtoG'
+p2 <- EnhancedVolcano(KSFtoGvsEGFP,
+    lab = KSFtoGvsEGFP$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS FtoG versus EGFP',
+    subtitle = 'FC cutoff, 1.5; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 0.75,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)
+p2  + ggplot2::theme(aspect.ratio = 1)
+```
+```{r fig.height=5, fig.width=4}
+keyvals <- ifelse(
+  WTvsEGFP$log2FoldChange <= -1.2 & WTvsEGFP$padj < 0.01, '#00AFBB',
+  ifelse(WTvsEGFP$log2FoldChange >= 1.2 & WTvsEGFP$padj < 0.01, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated by WT'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by WT'
+p3 <- EnhancedVolcano(WTvsEGFP,
+    lab = WTvsEGFP$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'WT versus EGFP',
+    subtitle = 'FC cutoff, 1.5; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 0.75,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)
+p3  + ggplot2::theme(aspect.ratio = 1)
+```
+```{r fig.height=5, fig.width=4}
+keyvals <- ifelse(
+  KSvsWT$log2FoldChange <= -1.2 & KSvsWT$padj < 0.01, '#00AFBB',
+  ifelse(KSvsWT$log2FoldChange >= 1.2 & KSvsWT$padj < 0.01, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated by KS'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by KS'
+p4 <- EnhancedVolcano(KSvsWT,
+    lab = KSvsWT$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS versus WT',
+    subtitle = 'FC cutoff, 1.5; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 0.75,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 40,
+    selectLab = qPCR_genes)
+p4  + ggplot2::theme(aspect.ratio = 1)
+```
+
+```{r fig.height=5, fig.width=4}
+KSvsKSFtoG$log2FoldChange = KSvsKSFtoG$log2FoldChange * -1
+
+keyvals <- ifelse(
+  KSvsKSFtoG$log2FoldChange <= -1.2 & KSvsKSFtoG$padj < 0.01, '#00AFBB',
+  ifelse(KSvsKSFtoG$log2FoldChange >= 1.2 & KSvsKSFtoG$padj < 0.01, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated by KS'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by KS'
+p5 <- EnhancedVolcano(KSvsKSFtoG,
+    lab = KSvsKSFtoG$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS versus KS (F-G)',
+    subtitle = 'FC cutoff, 1.5; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 0.75,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 40,
+    selectLab = qPCR_genes)
+p5  + ggplot2::theme(aspect.ratio = 1)
+```
+```{r fig.height=5, fig.width=4}
+# KSFtoGvsWT$log2FoldChange = KSFtoGvsWT$log2FoldChange * -1
+
+keyvals <- ifelse(
+  KSFtoGvsWT$log2FoldChange <= -1.2 & KSFtoGvsWT$padj < 0.01, '#00AFBB',
+  ifelse(KSFtoGvsWT$log2FoldChange >= 1.2 & KSFtoGvsWT$padj < 0.01, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated by KS (F-G)'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by KS (F-G)'
+p6 <- EnhancedVolcano(KSFtoGvsWT,
+    lab = KSFtoGvsWT$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS (F-G) versus WT',
+    subtitle = 'FC cutoff, 1.5; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 0.75,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = Inf,
+    maxoverlapsConnectors = Inf,
+    selectLab = qPCR_genes
+    )
+p6  + ggplot2::theme(aspect.ratio = 1)
+```
+```{r fig.height=10, fig.width=12}
+m1 <- grid.arrange(p1, p2, p3, p4, p5, p6, ncol=3)
+ggsave("multipage_volcanos.pdf", m1)
+```
+```{r}
+keyvals <- ifelse(
+  KSvsEGFP$Id %in% RosenLab_down, '#00AFBB',
+  ifelse(KSvsEGFP$Id %in% RosenLab_up, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated in Rosen lab'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by Rosen lab'
+pv1 <- EnhancedVolcano(KSvsEGFP,
+    lab = KSvsEGFP$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS versus EGFP',
+    subtitle = 'FC cutoff, 1.2; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 1,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)  + ggplot2::theme(aspect.ratio = 1)
+pv1
+ggsave("volcanos_KSvsEGFP_Rosen.pdf", pv1)
+```
+```{r}
+keyvals <- ifelse(
+  KSFtoGvsEGFP$Id %in% RosenLab_down, '#00AFBB',
+  ifelse(KSFtoGvsEGFP$Id %in% RosenLab_up, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated in Rosen lab'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by Rosen lab'
+pv2 <- EnhancedVolcano(KSFtoGvsEGFP,
+    lab = KSFtoGvsEGFP$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS FtoG versus EGFP',
+    subtitle = 'FC cutoff, 1.2; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 1,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)  + ggplot2::theme(aspect.ratio = 1)
+pv2
+ggsave("volcanos_KSFtoGvsEGFP_Rosen.pdf", pv2)
+
+```
+```{r}
+keyvals <- ifelse(
+  WTvsEGFP$Id %in% RosenLab_down, '#00AFBB',
+  ifelse(WTvsEGFP$Id %in% RosenLab_up, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated in Rosen lab'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by Rosen lab'
+pv3 <- EnhancedVolcano(WTvsEGFP,
+    lab = WTvsEGFP$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'WT versus EGFP',
+    subtitle = 'FC cutoff, 1.2; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 1,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes) + ggplot2::theme(aspect.ratio = 1)
+pv3 
+ggsave("volcanos_WTvsEGFP_Rosen.pdf", pv3)
+```
+```{r}
+keyvals <- ifelse(
+  KSFtoGvsWT$Id %in% RosenLab_down, '#00AFBB',
+  ifelse(KSFtoGvsWT$Id %in% RosenLab_up, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated in Rosen lab'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by Rosen lab'
+pv4 <- EnhancedVolcano(KSFtoGvsWT,
+    lab = KSFtoGvsWT$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'Ks FtoG versus WT',
+    subtitle = 'FC cutoff, 1.2; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 1,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)  + ggplot2::theme(aspect.ratio = 1)
+pv4
+ggsave("volcanos_KSFtoGvsWT_Rosen.pdf", pv4)
+```
+```{r}
+keyvals <- ifelse(
+  KSvsWT$Id %in% RosenLab_down, '#00AFBB',
+  ifelse(KSvsWT$Id %in% RosenLab_up, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated in Rosen lab'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by Rosen lab'
+pv5 <- EnhancedVolcano(KSvsWT,
+    lab = KSvsWT$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS versus WT',
+    subtitle = 'FC cutoff, 1.2; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 1,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes)  + ggplot2::theme(aspect.ratio = 1)
+pv5
+ggsave("volcanos_KSvsWT_Rosen.pdf", pv5)
+```
+```{r}
+keyvals <- ifelse(
+  KSvsKSFtoG$Id %in% RosenLab_down, '#00AFBB',
+  ifelse(KSvsKSFtoG$Id %in% RosenLab_up, '#bb0c00',
+         'grey'))
+keyvals[is.na(keyvals)] <- 'grey'
+names(keyvals)[keyvals == '#00AFBB'] <- 'Down-regulated in Rosen lab'
+names(keyvals)[keyvals == 'grey'] <- 'Not significant'
+names(keyvals)[keyvals == '#bb0c00'] <- 'Up-regulated by Rosen lab'
+pv6 <- EnhancedVolcano(KSvsKSFtoG,
+    lab = KSvsKSFtoG$gene_name,
+    x = 'log2FoldChange',
+    y = 'padj',
+    title = 'KS versus KS FtoG',
+    subtitle = 'FC cutoff, 1.2; p-value(adj) cutoff, 0.01',
+    caption = NULL,
+    titleLabSize = 8,
+    subtitleLabSize = 5,
+    pCutoff = 0.01,
+    FCcutoff = 1.2,
+    pointSize = 1.0,
+    ylim = c(0,150),
+    xlim = c(-10, 10),
+    labSize = 3,
+    colCustom = keyvals,
+    arrowheads = FALSE,
+    colAlpha = 1,
+    #col = c("grey30", "forestgreen", "royalblue", "red2"),
+    axisLabSize = 7,
+    drawConnectors = T,
+    widthConnectors = 0.5,
+    legendPosition = 'top',
+    legendLabSize = 4,
+    legendIconSize = 2.0,
+     border = 'full',
+    boxedLabels = F,
+    max.overlaps = 30,
+    selectLab = qPCR_genes) + ggplot2::theme(aspect.ratio = 1)
+pv6 
+ggsave("volcanos_KSvsKSFtoG_Rosen.pdf", pv6)
+```
+```{r fig.height=10, fig.width=12}
+mv2 <- grid.arrange(pv1, pv2, pv3, pv4, pv5, pv6, ncol = 3)
+ggsave("multipage_volcanos_Rosen.pdf", mv2)
+```
+

@@ -1,0 +1,118 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(SubCellBarCode)
+library(tidyverse)
+set.seed(12345)
+setwd("/Users/magalhae/Desktop/FANCY_proteome/FANCY_NPM1_20241206/txt/Analysis_w_Input/")
+options = guides(color = guide_legend(override.aes = list(size=3), ncol=2))
+```
+```{r}
+write_csv(markerProteins, "SubCell_markerProteins.csv")
+```
+```{r}
+proteinData <- read_csv("/Users/magalhae/Desktop/FANCY_proteome/FANCY_NPM1_20241206/txt/Analysis_w_Input/ordered_row_df_heatmap_wClustering_Total.csv")
+proteinDataF <- read_csv("/Users/magalhae/Desktop/FANCY_proteome/FANCY_NPM1_20241206/txt/Analysis_wo_Input/ordered_row_df_heatmap_wClustering_Total.csv")
+```
+```{r}
+proteinData_input_filter <- proteinData %>%
+  rowwise() %>%
+  filter(sum(c_across(c("Parental-input-1", "Parental-input-2", "Parental-input-3")) == 0) < 2) %>%
+  ungroup()
+
+proteinData_FANCI_filter <- proteinDataF %>%
+  rowwise() %>%
+  filter(sum(c_across(c("Parental-FANCI-1", "Parental-FANCI-2", "Parental-FANCI-3")) == 0) < 2) %>%
+  ungroup()
+```
+```{r}
+calculateCoveredProtein2 <- function (proteinIDs, markerproteins) 
+{
+    compartments <- c("S1", "S2", "S3", "S4", "N1", "N2", "N3", 
+        "N4", "C1", "C2", "C3", "C4", "C5", "M1", "M2")
+    color.code <- c("gold", "orange", "salmon", "tomato2", "grey90", 
+        "grey70", "grey50", "grey30", "lightblue", "aquamarine", 
+        "cyan", "deepskyblue2", "turquoise3", "burlywood4", "tan4")
+    compartment.size <- c(358, 351, 252, 174, 192, 121, 231, 
+        198, 242, 132, 220, 215, 341, 69, 269)
+    covered.proteins <- intersect(proteinIDs, markerproteins)
+    if (length(covered.proteins) < 1) 
+        stop("There is no overlap between marker proteins and data!")
+    c.marker.df <- SubCellBarCode::markerProteins[covered.proteins, 
+        ]
+    coverageCompWise <- lapply(seq_len(length(compartments)), 
+        function(x) {
+            temp.df <- c.marker.df[c.marker.df$Compartments == 
+                compartments[x], ]
+            values <- list(Compartments = compartments[x], ColorCode = color.code[x], 
+                ProteinCoverage = 100 * ((dim(temp.df)[1])/compartment.size[x]))
+        })
+    coverage.df <- as.data.frame(do.call("rbind", coverageCompWise))
+    non.enriched.loc <- coverage.df[coverage.df$ProteinCoverage < 
+        20, ]
+    if (nrow(non.enriched.loc) == 1) {
+        warning("There is not enough enrichment at: ", as.character(non.enriched.loc$Compartments), 
+            "\nWe recommend you to perform the fractionation, again.")
+    }
+    else if (nrow(non.enriched.loc) > 1) {
+        comp <- paste(as.character(non.enriched.loc$Compartments), 
+            collapse = ",")
+        warning("There are not enough enrichments at: ", comp, 
+            "\nWe recommend you to perform the fractionation!")
+    }
+    coverage.df$ProteinCoverage <- as.numeric(coverage.df$ProteinCoverage)
+    coverage.df$Compartments <- as.character(coverage.df$Compartments)
+    coverage.df$ColorCode <- as.character(coverage.df$ColorCode)
+    print(ggplot(data = coverage.df, aes(x = Compartments, y = ProteinCoverage)) + 
+        geom_bar(stat = "identity", fill = coverage.df$ColorCode) + 
+        scale_x_discrete(limits = c(compartments)) + theme_bw() + 
+        theme(text = element_text(size = 16), plot.title = element_text(hjust = 0.5), 
+            axis.text.x = element_text(face = "bold", color = "black"), 
+            axis.text.y = element_text(face = "bold", color = "black")) + 
+        labs(title = "Marker Protein Coverage Compartment-Wise", 
+            y = "% Protein Coverage", x = "Compartment"))
+    coverage <- round(length(covered.proteins)/length(markerproteins), 
+        2)
+    cat("Overall Coverage of marker proteins : ", coverage)
+    return(list(covered.proteins, coverage.df))
+}
+```
+
+```{r}
+I.prots<- calculateCoveredProtein2(proteinIDs = proteinData_input_filter$`Gene names`, 
+                        markerproteins = markerProteins[,1])
+
+F.prots <- calculateCoveredProtein2(proteinIDs = proteinData_FANCI_filter$`Gene names`, 
+                        markerproteins = markerProteins[,1])
+```
+```{r}
+r.markers <- markerQualityControl(coveredProteins = c.prots,protein.data = proteinData)
+```
+
+```{r}
+col <- as.character(proteinData$Color_MCF7Cells)
+names(col) <- as.character(proteinData$Compartment_Class_MCF7Cells)
+
+col1 <- as.character(proteinData$Color_A431Cells)
+names(col1) <- as.character(proteinData$Compartment_Class_A431Cells)
+
+col2 <- as.character(proteinData$ColorNei)
+names(col2) <- as.character(proteinData$Neighborhoods)
+
+ggplot(proteinData, aes(x = 1 , y = order)) +
+  geom_tile(aes(fill = Compartment_Class_A431Cells)) +  scale_fill_manual(values=col1)
+ggsave("Compartment_Class_A431Cells_subcel.pdf")
+
+ggplot(proteinData, aes(x = 1 , y = order)) +
+  geom_tile(aes(fill = Compartment_Class_MCF7Cells)) +  scale_fill_manual(values=col)
+ggsave("Compartment_Class_MCF7Cells_subcel.pdf")
+
+ggplot(proteinData, aes(x = 1 , y = order)) +
+  geom_tile(aes(fill = Neighborhoods)) +  scale_fill_manual(values=col2)
+ggsave("Neighborhood_Subcell.pdf")
+```
+
